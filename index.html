@@ -452,6 +452,51 @@ function EmployeePage({ notice, onAdmin }) {
         </div>
       </div>
 
+      {/* 내 신청 내역 */}
+      {form.name.trim() && form.dept && (
+        <div style={CARD}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: showMyApps ? 14 : 0 }}>
+            <SLabel>📋 내 신청 내역</SLabel>
+            <button style={BS} onClick={async () => {
+              if (!showMyApps) {
+                setMyAppsLoading(true);
+                const all = await loadApplications();
+                setMyApps(all.filter(a => a.name === form.name.trim() && a.dept === form.dept));
+                setMyAppsLoading(false);
+              }
+              setShowMyApps(v => !v);
+            }}>
+              {showMyApps ? "닫기" : "조회하기"}
+            </button>
+          </div>
+          {showMyApps && (
+            myAppsLoading
+              ? <div style={{ textAlign:"center", padding:20, color:"#9CA3AF" }}>조회 중...</div>
+              : myApps.length === 0
+                ? <div style={{ textAlign:"center", padding:20, color:"#9CA3AF" }}>신청 내역이 없습니다.</div>
+                : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {myApps.map(a => (
+                      <div key={a.id} style={{ border:"1px solid #E5E7EB", borderRadius:8, padding:"12px 14px" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                          <span style={{ fontFamily:"monospace", fontSize:12, color:"#6366F1" }}>{a.id}</span>
+                          <span style={{ fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:20, background:(STATUS_COLOR[a.status]||"#aaa")+"22", color:STATUS_COLOR[a.status]||"#aaa" }}>{a.status}</span>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
+                          <span style={{ color:"#6B7280" }}>{a.date} · {a.pay}</span>
+                          <span style={{ fontWeight:700, color:"#1A56DB" }}>{fmt(a.total||0)}</span>
+                        </div>
+                        {(a.mainProducts?.length > 0 || a.sampleProducts?.length > 0) && (
+                          <div style={{ marginTop:6, fontSize:12, color:"#6B7280" }}>
+                            {[...(a.mainProducts||[]).map(p=>`[본품] ${p.name}`), ...(a.sampleProducts||[]).map(p=>`[샘플] ${p.name} ${p.qty}개`)].join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+          )}
+        </div>
+      )}
+
       {/* 제품 선택 */}
       <div style={CARD}>
         <SLabel>{tab === "main" ? "제품 선택 (본품: 제품별 1개 고정)" : "제품 선택 및 수량"}</SLabel>
@@ -633,51 +678,6 @@ function EmployeePage({ notice, onAdmin }) {
           </button>
         </div>
       </div>
-
-      {/* 내 신청 내역 */}
-      {form.name.trim() && form.dept && (
-        <div style={CARD}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: showMyApps ? 14 : 0 }}>
-            <SLabel>📋 내 신청 내역</SLabel>
-            <button style={BS} onClick={async () => {
-              if (!showMyApps) {
-                setMyAppsLoading(true);
-                const all = await loadApplications();
-                setMyApps(all.filter(a => a.name === form.name.trim() && a.dept === form.dept));
-                setMyAppsLoading(false);
-              }
-              setShowMyApps(v => !v);
-            }}>
-              {showMyApps ? "닫기" : "조회하기"}
-            </button>
-          </div>
-          {showMyApps && (
-            myAppsLoading
-              ? <div style={{ textAlign:"center", padding:20, color:"#9CA3AF" }}>조회 중...</div>
-              : myApps.length === 0
-                ? <div style={{ textAlign:"center", padding:20, color:"#9CA3AF" }}>신청 내역이 없습니다.</div>
-                : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {myApps.map(a => (
-                      <div key={a.id} style={{ border:"1px solid #E5E7EB", borderRadius:8, padding:"12px 14px" }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                          <span style={{ fontFamily:"monospace", fontSize:12, color:"#6366F1" }}>{a.id}</span>
-                          <span style={{ fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:20, background:(STATUS_COLOR[a.status]||"#aaa")+"22", color:STATUS_COLOR[a.status]||"#aaa" }}>{a.status}</span>
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
-                          <span style={{ color:"#6B7280" }}>{a.date} · {a.pay}</span>
-                          <span style={{ fontWeight:700, color:"#1A56DB" }}>{fmt(a.total||0)}</span>
-                        </div>
-                        {(a.mainProducts?.length > 0 || a.sampleProducts?.length > 0) && (
-                          <div style={{ marginTop:6, fontSize:12, color:"#6B7280" }}>
-                            {[...(a.mainProducts||[]).map(p=>`[본품] ${p.name}`), ...(a.sampleProducts||[]).map(p=>`[샘플] ${p.name} ${p.qty}개`)].join(" · ")}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
