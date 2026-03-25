@@ -746,6 +746,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
   const [dateTo,       setDateTo]       = useState("");
   const [personSearch, setPersonSearch] = useState("");
   const [employees,    setEmployees]    = useState([]);
+  const [collapsedDates,setCollapsedDates]= useState(new Set());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -766,6 +767,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
   const bulkStatus   = async (status) => { if(!checkedIds.size)return; let reason=""; if(status==="반려"){ reason=window.prompt("반려 사유를 입력해주세요:")||""; } const changes={status,...(status==="반려"&&reason?{rejectReason:reason}:{})}; const toUpd=apps.filter(a=>checkedIds.has(a.id)); try { await Promise.all(toUpd.map(a=>updateApplication(a.id,changes,a))); } catch(e){ console.error(e); } const u=apps.map(a=>checkedIds.has(a.id)?{...a,...changes}:a); setApps(u); setCheckedIds(new Set()); };
   const confirmPay   = async (id) => { const cur=apps.find(a=>a.id===id); if(!cur)return; try { await updateApplication(id,{status:"출고준비",payConfirmed:true},cur); } catch(e){ console.error(e); } const u=apps.map(a=>a.id===id?{...a,status:"출고준비",payConfirmed:true}:a); setApps(u); if(selected?.id===id)setSelected(s=>({...s,status:"출고준비",payConfirmed:true})); };
   const deleteApp    = async (id) => { if(!window.confirm("삭제할까요?"))return; try { await removeApplication(id); } catch(e){ console.error(e); } const u=apps.filter(a=>a.id!==id); setApps(u); if(selected?.id===id)setSelected(null); };
+  const bulkDelete   = async () => { if(!checkedIds.size)return; if(!window.confirm(`선택한 ${checkedIds.size}건을 삭제할까요?`))return; const toDelete=apps.filter(a=>checkedIds.has(a.id)); try { await Promise.all(toDelete.map(a=>removeApplication(a.id))); } catch(e){ console.error(e); } const u=apps.filter(a=>!checkedIds.has(a.id)); setApps(u); if(selected&&checkedIds.has(selected.id))setSelected(null); setCheckedIds(new Set()); };
 
   const exportCSV = () => {
     const toExport = checkedIds.size > 0 ? apps.filter(a => checkedIds.has(a.id)) : displayed;
@@ -890,6 +892,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
                 <span style={{ fontSize:13,color:"#fff",fontWeight:600 }}>{checkedIds.size}건 선택</span>
                 <div style={{ flex:1 }} />
                 {["출고준비","반려"].map(st=><button key={st} style={{ padding:"6px 14px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",background:st==="출고준비"?"#0891B2":"#DC2626",color:"#fff" }} onClick={()=>bulkStatus(st)}>{st}</button>)}
+                <button style={{ padding:"6px 14px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",background:"#7F1D1D",color:"#FCA5A5" }} onClick={bulkDelete}>🗑 선택 삭제</button>
                 <button style={{ padding:"6px 12px",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,fontSize:12,background:"transparent",color:"#9CA3AF",cursor:"pointer",fontFamily:"inherit" }} onClick={()=>setCheckedIds(new Set())}>취소</button>
               </div>
             )}
@@ -897,12 +900,13 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
               : grouped.length===0 ? <div style={{ textAlign:"center",padding:40,color:"#9CA3AF" }}>신청 내역이 없습니다.</div>
               : grouped.map(([date,dayApps]) => (
                 <div key={date} style={{ marginBottom:20 }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8 }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8,cursor:"pointer",userSelect:"none" }} onClick={()=>{const n=new Set(collapsedDates);n.has(date)?n.delete(date):n.add(date);setCollapsedDates(n);}}>
                     <div style={{ fontWeight:700,fontSize:13 }}>📅 {date}</div>
                     <div style={{ flex:1,height:1,background:"#E5E7EB" }} />
                     <div style={{ fontSize:12,color:"#6B7280" }}>{dayApps.length}건 · {fmt(dayApps.reduce((s,a)=>s+(a.total||0),0))}</div>
+                    <span style={{ fontSize:11,color:"#9CA3AF",transform:collapsedDates.has(date)?"rotate(-90deg)":"rotate(0deg)",display:"inline-block",transition:"transform .2s" }}>▼</span>
                   </div>
-                  <div style={{ overflowX:"auto" }}>
+                  {!collapsedDates.has(date) && <div style={{ overflowX:"auto" }}>
                     <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
                       <thead>
                         <tr style={{ background:"#F9FAFB" }}>
@@ -911,7 +915,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
                               checked={dayApps.length>0&&dayApps.every(a=>checkedIds.has(a.id))}
                               onChange={e=>{const n=new Set(checkedIds);dayApps.forEach(a=>e.target.checked?n.add(a.id):n.delete(a.id));setCheckedIds(n);}} />
                           </th>
-                          {["신청번호","이름","부서","본품","샘플","합계","결제","상태",""].map(h=><th key={h} style={TH}>{h}</th>)}
+                          {["신청번호","이름","부서","본품","샘플","합계","결제","상태"].map(h=><th key={h} style={TH}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -928,10 +932,9 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
                               <td style={{ ...TD,fontFamily:"monospace",fontWeight:700,color:"#1A56DB" }}>{fmt(a.total||0)}</td>
                               <td style={TD}>{a.pay}</td>
                               <td style={TD}><span style={{ display:"inline-block",padding:"3px 8px",borderRadius:20,fontSize:12,fontWeight:700,background:(STATUS_COLOR[a.status]||"#aaa")+"22",color:STATUS_COLOR[a.status]||"#aaa" }}>{a.status}</span></td>
-                              <td style={TD}><button style={BT} onClick={e=>{e.stopPropagation();deleteApp(a.id);}}>삭제</button></td>
                             </tr>
                             {selected?.id===a.id&&(
-                              <tr><td colSpan={10} style={{ padding:0 }}>
+                              <tr><td colSpan={9} style={{ padding:0 }}>
                                 <InlineDetail app={selected} onStatusChange={(st,reason)=>updateStatus(a.id,st,reason)} onPayConfirm={()=>confirmPay(a.id)} onClose={()=>setSelected(null)} />
                               </td></tr>
                             )}
@@ -939,7 +942,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </div>
               ))}
           </>
