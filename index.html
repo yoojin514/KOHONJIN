@@ -213,6 +213,9 @@ const GLOBAL_CSS = `
     .ship-sidebar { width: 100% !important; }
     .emp-add-grid { grid-template-columns: 1fr 1fr !important; }
     .admin-header-btns { flex-wrap: wrap !important; }
+    .emp-header { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+    .emp-header-btns { flex-wrap: wrap !important; gap: 6px !important; }
+    .emp-header-btns button { flex: 1 1 auto !important; font-size: 11px !important; padding: 6px 8px !important; }
   }
 `;
 const FF = "'Noto Sans KR','Apple SD Gothic Neo',sans-serif";
@@ -237,7 +240,7 @@ function Watermark({ name, dept }) {
     <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,pointerEvents:'none',zIndex:9998,overflow:'hidden' }}>
       {Array.from({length:32},(_,i)=>{
         const row=Math.floor(i/4), col=i%4;
-        return <div key={i} style={{ position:'absolute',top:`${row*14+3}%`,left:`${col*28-8}%`,transform:'rotate(-28deg)',fontSize:13,fontWeight:700,color:'rgba(0,0,0,0.055)',whiteSpace:'nowrap',fontFamily:FF,userSelect:'none',letterSpacing:1 }}>{text}</div>;
+        return <div key={i} style={{ position:'absolute',top:`${row*14+3}%`,left:`${col*28-8}%`,transform:'rotate(-28deg)',fontSize:'clamp(9px,2vw,13px)',fontWeight:700,color:'rgba(0,0,0,0.045)',whiteSpace:'nowrap',fontFamily:FF,userSelect:'none',letterSpacing:1 }}>{text}</div>;
       })}
     </div>
   );
@@ -568,15 +571,15 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
       )}
 
       {/* 헤더 버튼 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="emp-header" style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         {empAuth
           ? <div style={{ fontSize:13,fontWeight:600,color:'#374151' }}>👋 {empAuth.name} <span style={{ color:'#9CA3AF',fontWeight:400 }}>({empAuth.dept})</span></div>
           : <div />
         }
-        <div style={{ display:"flex", gap:8 }}>
-          {empAuth && <button style={{ ...BS,background:'#F0FDF4',color:'#059669',borderColor:'#BBF7D0' }} onClick={()=>setPinModal(true)}>🔑 PIN 변경</button>}
+        <div className="emp-header-btns" style={{ display:"flex", gap:8 }}>
+          {empAuth && <button style={{ ...BS,background:'#F0FDF4',color:'#059669',borderColor:'#BBF7D0' }} onClick={()=>setPinModal(true)}>🔑 PIN</button>}
           {empAuth && <button style={{ ...BS,background:'#FEF2F2',color:'#DC2626',borderColor:'#FECACA' }} onClick={onEmpLogout}>로그아웃</button>}
-          <button style={{ ...BS, padding: "8px 14px" }} onClick={onAdmin}>⚙️ 관리자 페이지</button>
+          <button style={{ ...BS }} onClick={onAdmin}>⚙️ 관리자</button>
         </div>
       </div>
 
