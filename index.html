@@ -226,6 +226,15 @@ const GLOBAL_CSS = `
   }
 `;
 const FF = "'Noto Sans KR','Apple SD Gothic Neo',sans-serif";
+function useIsMobile() {
+  const [m, setM] = React.useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  React.useEffect(() => {
+    const h = () => setM(window.innerWidth < 640);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return m;
+}
 const INP  = { width:"100%", padding:"10px 13px", border:"1.5px solid #D1D5DB", borderRadius:8, fontSize:16, fontFamily:"inherit", outline:"none", color:"#111", background:"#fff", boxSizing:"border-box" };
 const BINP = (err) => ({ ...INP, ...(err ? { borderColor:"#DC2626" } : {}) });
 const BP   = { padding:"12px 22px", background:"#1A56DB", color:"#fff", border:"none", borderRadius:8, fontWeight:700, fontSize:15, cursor:"pointer", fontFamily:"inherit", touchAction:"manipulation" };
@@ -321,6 +330,7 @@ function EmployeeLogin({ onLogin, onAdminBypass, onGoAdmin }) {
    신청 페이지
 ════════════════════════════════════════════════════════ */
 function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
+  const isMobile = useIsMobile();
   const makeForm = () => ({
     name: empAuth?.name || "", dept: empAuth?.dept || "", date: today(), pay: "",
     cardCompany: "", cardNumber: "", cardExpiry: "",
@@ -619,7 +629,7 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
       {/* 신청자 정보 */}
       <div style={CARD}>
         <SLabel>신청자 정보</SLabel>
-        <div className="info-grid">
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:14 }}>
           <SField label="이름" required error={errors.name}>
             <input style={{ ...BINP(errors.name), ...(empAuth?{background:'#F9FAFB',color:'#374151'}:{}) }} placeholder="홍길동" value={form.name}
               readOnly={!!empAuth} onChange={empAuth ? undefined : e => setForm(f => ({ ...f, name: e.target.value }))} />
@@ -634,8 +644,8 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
                 </select>
             }
           </SField>
-          {empError && <div className="span2" style={{ gridColumn:"span 2", background:"#FEF2F2", color:"#DC2626", fontSize:13, padding:"10px 14px", borderRadius:8, fontWeight:600 }}>🚫 {empError}</div>}
-          <div className="span2" style={{ gridColumn: "span 2" }}>
+          {empError && <div style={{ gridColumn: isMobile ? "span 1" : "span 2", background:"#FEF2F2", color:"#DC2626", fontSize:13, padding:"10px 14px", borderRadius:8, fontWeight:600 }}>🚫 {empError}</div>}
+          <div style={{ gridColumn: isMobile ? "span 1" : "span 2" }}>
             <SField label="신청일자">
               <DatePickerInput style={INP} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </SField>
@@ -768,7 +778,7 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
         <SLabel>결제 방법</SLabel>
         {errors.pay && <SErrMsg>{errors.pay}</SErrMsg>}
         {form.sampleItems.some(it => it.checked) && <div style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", borderRadius: 7, padding: "10px 14px", fontSize: 13, color: "#0369A1", marginBottom: 12 }}>🧪 샘플은 <b>무통장 입금으로만</b> 구매 가능합니다.</div>}
-        <div className="pay-grid">
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:10 }}>
           {[["🏦","무통장입금","계좌이체"],["💳","카드결제","본품 전용 · 부가세 10% 추가"]].map(([icon, label, sub]) => {
             const blocked = label === "카드결제" && form.sampleItems.some(it => it.checked);
             return (
