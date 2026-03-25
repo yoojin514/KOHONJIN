@@ -107,6 +107,40 @@ async function deleteEmployee(id) {
   const { error } = await sb.from('employees').delete().eq('id', id);
   if (error) throw error;
 }
+async function getMyIP() {
+  try { const r=await fetch('https://api.ipify.org?format=json'); const d=await r.json(); return d.ip||'unknown'; } catch{ return 'unknown'; }
+}
+async function verifyEmployee(name, dept, pin) {
+  const { data,error } = await sb.from('employees').select('*').eq('name',name).eq('dept',dept).maybeSingle();
+  if(error||!data) return null;
+  if((data.pin??'0000') !== pin) return null;
+  return data;
+}
+async function createEmpSession(empId, empName, empDept, token, ip) {
+  await sb.from('sessions').delete().eq('employee_id', empId);
+  const { error } = await sb.from('sessions').insert({ employee_id:empId, employee_name:empName, employee_dept:empDept, token, ip, user_agent:navigator.userAgent.slice(0,200) });
+  if(error) throw error;
+}
+async function validateEmpSession(token) {
+  const { data,error } = await sb.from('sessions').select('employee_id').eq('token',token).maybeSingle();
+  if(error||!data) return null;
+  return data;
+}
+async function removeEmpSession(token) {
+  await sb.from('sessions').delete().eq('token',token);
+}
+async function logAccess(empName, empDept, action, ip) {
+  try { await sb.from('access_logs').insert({ employee_name:empName, employee_dept:empDept, action, ip, user_agent:navigator.userAgent.slice(0,200) }); } catch{}
+}
+async function loadAccessLogs() {
+  const { data,error } = await sb.from('access_logs').select('*').order('created_at',{ascending:false}).limit(300);
+  if(error){ console.error(error); return []; }
+  return data||[];
+}
+async function updateEmpPin(id, pin) {
+  const { error } = await sb.from('employees').update({ pin }).eq('id',id);
+  if(error) throw error;
+}
 
 function getNthWeekday(y, m, dow, n) {
   const d = new Date(y, m, 1); let c = 0;
@@ -191,11 +225,87 @@ const TD   = { padding:"10px", borderBottom:"1px solid #F3F4F6", fontSize:13 };
 const CARD = { background:"#fff", border:"1px solid #E5E7EB", borderRadius:12, padding:"20px 16px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" };
 
 /* ════════════════════════════════════════════════════════
+   워터마크
+════════════════════════════════════════════════════════ */
+function Watermark({ name, dept }) {
+  const text = `${name} · ${dept} · ${today()}`;
+  return (
+    <div style={{ position:'fixed',top:0,left:0,right:0,bottom:0,pointerEvents:'none',zIndex:9998,overflow:'hidden' }}>
+      {Array.from({length:32},(_,i)=>{
+        const row=Math.floor(i/4), col=i%4;
+        return <div key={i} style={{ position:'absolute',top:`${row*14+3}%`,left:`${col*28-8}%`,transform:'rotate(-28deg)',fontSize:13,fontWeight:700,color:'rgba(0,0,0,0.055)',whiteSpace:'nowrap',fontFamily:FF,userSelect:'none',letterSpacing:1 }}>{text}</div>;
+      })}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   직원 로그인
+════════════════════════════════════════════════════════ */
+function EmployeeLogin({ onLogin }) {
+  const [name,    setName]    = useState('');
+  const [dept,    setDept]    = useState('');
+  const [pin,     setPin]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  const handleLogin = async () => {
+    if(!name.trim()||!dept||!pin.trim()){ setError('모든 항목을 입력해주세요.'); return; }
+    setLoading(true); setError('');
+    try {
+      const emp = await verifyEmployee(name.trim(), dept, pin.trim());
+      if(!emp){ setError('이름, 부서, 또는 PIN이 일치하지 않습니다.'); setLoading(false); return; }
+      const hire=new Date(emp.hire_date), avail=new Date(hire); avail.setMonth(avail.getMonth()+3);
+      if(new Date()<avail){ setError(`입사 후 3개월 미만은 신청이 불가합니다. (${avail.getFullYear()}.${avail.getMonth()+1}.${avail.getDate()} 이후 가능)`); setLoading(false); return; }
+      const ip = await getMyIP();
+      const token = (typeof crypto!=='undefined'&&crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(36).slice(2));
+      await createEmpSession(emp.id, emp.name, emp.dept, token, ip);
+      await logAccess(emp.name, emp.dept, '로그인', ip);
+      localStorage.setItem('emp_session', JSON.stringify({ token, empId:emp.id, empName:emp.name, empDept:emp.dept }));
+      onLogin({ id:emp.id, name:emp.name, dept:emp.dept, token });
+    } catch(e){ console.error(e); setError('로그인 중 오류가 발생했습니다.'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#F4F5F7',fontFamily:FF,padding:16 }}>
+      <div style={{ background:'#fff',border:'1px solid #E5E7EB',borderRadius:16,padding:'36px 32px',width:'100%',maxWidth:400,boxShadow:'0 4px 24px rgba(0,0,0,0.08)' }}>
+        <div style={{ textAlign:'center',marginBottom:28 }}>
+          <div style={{ width:52,height:52,background:'#111827',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,margin:'0 auto 14px' }}>🌿</div>
+          <div style={{ fontWeight:800,fontSize:20,marginBottom:4 }}>고혼진리퍼블릭</div>
+          <div style={{ fontSize:13,color:'#6B7280' }}>제품 신청 시스템</div>
+        </div>
+        <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+          <div>
+            <div style={{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:5 }}>이름</div>
+            <input style={INP} placeholder="홍길동" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleLogin()} />
+          </div>
+          <div>
+            <div style={{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:5 }}>부서</div>
+            <select style={{ ...INP,color:dept?'#111':'#9CA3AF' }} value={dept} onChange={e=>setDept(e.target.value)}>
+              <option value="" disabled>부서 선택</option>
+              {DEPT_LIST.map(d=><option key={d} value={d} style={{ color:'#111' }}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:12,fontWeight:600,color:'#374151',marginBottom:5 }}>PIN</div>
+            <input style={INP} type="password" placeholder="관리자가 지정한 PIN" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleLogin()} maxLength={10} />
+          </div>
+          {error && <div style={{ background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#DC2626' }}>{error}</div>}
+          <button style={{ ...BP,marginTop:4 }} onClick={handleLogin} disabled={loading}>{loading?'확인 중...':'로그인'}</button>
+        </div>
+        <div style={{ marginTop:16,textAlign:'center',fontSize:12,color:'#9CA3AF' }}>PIN을 모르시면 관리자에게 문의해주세요</div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
    신청 페이지
 ════════════════════════════════════════════════════════ */
-function EmployeePage({ notice, onAdmin }) {
+function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
   const makeForm = () => ({
-    name: "", dept: "", date: today(), pay: "",
+    name: empAuth?.name || "", dept: empAuth?.dept || "", date: today(), pay: "",
     cardCompany: "", cardNumber: "", cardExpiry: "",
     mainItems:   MAIN_PRODUCTS.map(p => ({ id: p.id, checked: false })),
     sampleItems: SAMPLE_PRODUCTS.map(p => ({ id: p.id, checked: false, qty: p.minQty })),
@@ -404,9 +514,17 @@ function EmployeePage({ notice, onAdmin }) {
 
   return (
     <div style={{ fontFamily: FF, maxWidth: 720, margin: "0 auto", padding: "24px 14px 60px", display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* 관리자 버튼 */}
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button style={{ ...BS, padding: "8px 14px" }} onClick={onAdmin}>⚙️ 관리자 페이지</button>
+      {empAuth && <Watermark name={empAuth.name} dept={empAuth.dept} />}
+      {/* 헤더 버튼 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {empAuth
+          ? <div style={{ fontSize:13,fontWeight:600,color:'#374151' }}>👋 {empAuth.name} <span style={{ color:'#9CA3AF',fontWeight:400 }}>({empAuth.dept})</span></div>
+          : <div />
+        }
+        <div style={{ display:"flex", gap:8 }}>
+          {empAuth && <button style={{ ...BS,background:'#FEF2F2',color:'#DC2626',borderColor:'#FECACA' }} onClick={onEmpLogout}>로그아웃</button>}
+          <button style={{ ...BS, padding: "8px 14px" }} onClick={onAdmin}>⚙️ 관리자 페이지</button>
+        </div>
       </div>
 
       {/* 공지사항 */}
@@ -440,15 +558,18 @@ function EmployeePage({ notice, onAdmin }) {
         <SLabel>신청자 정보</SLabel>
         <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <SField label="이름" required error={errors.name}>
-            <input style={BINP(errors.name)} placeholder="홍길동" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <input style={{ ...BINP(errors.name), ...(empAuth?{background:'#F9FAFB',color:'#374151'}:{}) }} placeholder="홍길동" value={form.name}
+              readOnly={!!empAuth} onChange={empAuth ? undefined : e => setForm(f => ({ ...f, name: e.target.value }))} />
           </SField>
           <SField label="부서" required error={errors.dept}>
-            <select style={{ ...BINP(errors.dept), color: form.dept ? "#111" : "#9CA3AF" }}
-              value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
-              <option value="" disabled>부서 선택</option>
-              {DEPT_LIST.map(d => <option key={d} value={d} style={{ color: "#111" }}>{d}</option>)}
-            </select>
+            {empAuth
+              ? <input style={{ ...INP, background:'#F9FAFB', color:'#374151' }} value={form.dept} readOnly />
+              : <select style={{ ...BINP(errors.dept), color: form.dept ? "#111" : "#9CA3AF" }}
+                  value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
+                  <option value="" disabled>부서 선택</option>
+                  {DEPT_LIST.map(d => <option key={d} value={d} style={{ color: "#111" }}>{d}</option>)}
+                </select>
+            }
           </SField>
           {empError && <div style={{ gridColumn:"span 2", background:"#FEF2F2", color:"#DC2626", fontSize:13, padding:"10px 14px", borderRadius:8, fontWeight:600 }}>🚫 {empError}</div>}
           <div style={{ gridColumn: "span 2" }}>
@@ -871,7 +992,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
       {/* 탭 */}
       <div style={{ background:"#fff",border:"1px solid #E5E7EB",borderRadius:10,padding:"18px 16px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
         <div style={{ display:"flex",borderBottom:"1px solid #E5E7EB",marginBottom:16,overflowX:"auto" }}>
-          {[["list","📋 신청 목록"],["stats","📊 통계"],["person","👤 신청자별 통계"],["employees","👥 직원 관리"]].map(([k,l]) => (
+          {[["list","📋 신청 목록"],["stats","📊 통계"],["person","👤 신청자별 통계"],["employees","👥 직원 관리"],["logs","🔍 접속 로그"]].map(([k,l]) => (
             <button key={k} onClick={()=>setTab(k)} style={{ padding:"10px 16px",border:"none",background:"transparent",fontFamily:"inherit",fontWeight:tab===k?700:500,fontSize:14,color:tab===k?"#1A56DB":"#6B7280",borderBottom:tab===k?"2px solid #1A56DB":"2px solid transparent",cursor:"pointer",whiteSpace:"nowrap" }}>{l}</button>
           ))}
         </div>
@@ -1006,6 +1127,9 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
         {tab==="employees" && (
           <EmployeeManager employees={employees} onReload={() => loadEmployees().then(setEmployees)} />
         )}
+
+        {/* 접속 로그 */}
+        {tab==="logs" && <AccessLogViewer />}
       </div>
     </div>
   );
@@ -1293,6 +1417,57 @@ function ShipPage({ onBack }) {
 }
 
 /* ════════════════════════════════════════════════════════
+   접속 로그 뷰어
+════════════════════════════════════════════════════════ */
+function AccessLogViewer() {
+  const [logs,    setLogs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+
+  useEffect(() => {
+    loadAccessLogs().then(d=>{ setLogs(d); setLoading(false); });
+  }, []);
+
+  const filtered = search ? logs.filter(l=>l.employee_name?.includes(search)||l.employee_dept?.includes(search)||l.action?.includes(search)||l.ip?.includes(search)) : logs;
+
+  return (
+    <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8 }}>
+        <div style={{ fontSize:14,fontWeight:700 }}>🔍 접속 로그 (최근 300건)</div>
+        <div style={{ display:'flex',gap:8 }}>
+          <input style={{ ...INP,width:200,padding:'7px 11px',fontSize:13 }} placeholder="이름/부서/액션/IP 검색" value={search} onChange={e=>setSearch(e.target.value)} />
+          <button style={BS} onClick={()=>{ setLoading(true); loadAccessLogs().then(d=>{ setLogs(d); setLoading(false); }); }}>🔄 새로고침</button>
+        </div>
+      </div>
+      {loading ? <div style={{ textAlign:'center',padding:40,color:'#9CA3AF' }}>불러오는 중...</div>
+        : filtered.length===0 ? <div style={{ textAlign:'center',padding:40,color:'#9CA3AF' }}>로그가 없습니다.</div>
+        : <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%',borderCollapse:'collapse',fontSize:13 }}>
+              <thead>
+                <tr style={{ background:'#F9FAFB' }}>
+                  {['시각','이름','부서','액션','IP','기기'].map(h=><th key={h} style={TH}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((l,i)=>(
+                  <tr key={i} style={{ background: l.action==='로그인'?'#F0FDF4':l.action==='로그아웃'?'#FFF7ED':'#fff' }}>
+                    <td style={{ ...TD,fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap' }}>{l.created_at?.replace('T',' ').slice(0,19)||'—'}</td>
+                    <td style={{ ...TD,fontWeight:700 }}>{l.employee_name||'—'}</td>
+                    <td style={{ ...TD,color:'#6B7280' }}>{l.employee_dept||'—'}</td>
+                    <td style={TD}><span style={{ display:'inline-block',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:700,background:l.action==='로그인'?'#DCFCE7':l.action==='로그아웃'?'#FED7AA':'#E0E7FF',color:l.action==='로그인'?'#059669':l.action==='로그아웃'?'#C2410C':'#4338CA' }}>{l.action||'—'}</span></td>
+                    <td style={{ ...TD,fontFamily:'monospace',fontSize:11 }}>{l.ip||'—'}</td>
+                    <td style={{ ...TD,fontSize:11,color:'#9CA3AF',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(l.user_agent||'').split(' ')[0]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+      }
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
    직원 관리 컴포넌트
 ════════════════════════════════════════════════════════ */
 function EmployeeManager({ employees, onReload }) {
@@ -1454,7 +1629,7 @@ function EmployeeManager({ employees, onReload }) {
           : <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
                 <tr style={{ background:"#F9FAFB" }}>
-                  {["이름","부서","입사일","신청 가능일",""].map(h => <th key={h} style={TH}>{h}</th>)}
+                  {["이름","부서","입사일","신청 가능일","PIN",""].map(h => <th key={h} style={TH}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -1471,6 +1646,15 @@ function EmployeeManager({ employees, onReload }) {
                         <span style={{ color: canApply ? "#059669" : "#DC2626", fontWeight:600 }}>
                           {canApply ? "✅ 가능" : `${avail.getFullYear()}.${avail.getMonth()+1}.${avail.getDate()} 부터`}
                         </span>
+                      </td>
+                      <td style={TD}>
+                        <button style={{ ...BT,color:'#1A56DB',borderColor:'#C7D7FB' }} onClick={async()=>{
+                          const p=window.prompt(`"${emp.name}" PIN 설정 (현재: ${emp.pin??'0000'})\n새 PIN 입력:`);
+                          if(p===null)return;
+                          if(!p.trim()){ alert('PIN을 입력해주세요.'); return; }
+                          try { await updateEmpPin(emp.id, p.trim()); onReload(); alert('PIN이 변경되었습니다.'); }
+                          catch{ alert('변경 중 오류가 발생했습니다.'); }
+                        }}>PIN 설정</button>
                       </td>
                       <td style={TD}>
                         <button style={{ ...BT, color:"#DC2626", borderColor:"#FECACA" }} onClick={() => handleDelete(emp.id, emp.name)}>삭제</button>
@@ -1620,14 +1804,46 @@ function ShipPersonChip({ app, isBlue, typeFilter }) {
    앱 라우터
 ════════════════════════════════════════════════════════ */
 function App() {
-  const [page,   setPage]   = useState("employee");
-  const [auth,   setAuth]   = useState(false);
-  const [notice, setNotice] = useState({ title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 10일 전 영업일 마감", deadline: "" });
+  const [page,       setPage]       = useState("employee");
+  const [auth,       setAuth]       = useState(false);
+  const [empAuth,    setEmpAuth]    = useState(null);
+  const [empLoading, setEmpLoading] = useState(true);
+  const [notice,     setNotice]     = useState({ title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 10일 전 영업일 마감", deadline: "" });
 
   useEffect(() => {
     const el = document.createElement("style"); el.textContent = GLOBAL_CSS; document.head.appendChild(el);
     return () => document.head.removeChild(el);
   }, []);
+
+  // 저장된 세션 복원
+  useEffect(() => {
+    const restore = async () => {
+      const raw = localStorage.getItem('emp_session');
+      if(!raw){ setEmpLoading(false); return; }
+      try {
+        const s = JSON.parse(raw);
+        const valid = await validateEmpSession(s.token);
+        if(valid){ setEmpAuth({ id:s.empId, name:s.empName, dept:s.empDept, token:s.token }); }
+        else { localStorage.removeItem('emp_session'); }
+      } catch{ localStorage.removeItem('emp_session'); }
+      setEmpLoading(false);
+    };
+    restore();
+  }, []);
+
+  // 세션 주기적 검증 (60초) - 다른 기기 로그인 시 강제 로그아웃
+  useEffect(() => {
+    if(!empAuth) return;
+    const timer = setInterval(async () => {
+      const valid = await validateEmpSession(empAuth.token);
+      if(!valid){
+        localStorage.removeItem('emp_session');
+        setEmpAuth(null);
+        alert('다른 기기에서 로그인되어 자동 로그아웃됩니다.');
+      }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [empAuth]);
 
   useEffect(() => { loadNotice().then(n => { if (n) setNotice(n); }); }, []);
   useEffect(() => {
@@ -1635,13 +1851,25 @@ function App() {
   }, [page]);
 
   const logout = () => { localStorage.removeItem("admin_auto"); localStorage.removeItem("admin_pw"); setAuth(false); setPage("admin"); };
+  const empLogout = async () => {
+    if(empAuth){
+      const ip = await getMyIP().catch(()=>'unknown');
+      await logAccess(empAuth.name, empAuth.dept, '로그아웃', ip);
+      await removeEmpSession(empAuth.token).catch(()=>{});
+    }
+    localStorage.removeItem('emp_session');
+    setEmpAuth(null);
+  };
+
+  if(empLoading) return <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',fontFamily:FF,color:'#9CA3AF',fontSize:15 }}>로딩 중...</div>;
 
   if (page === "ship") return <ShipPage onBack={() => setPage("admin")} />;
   if (page === "admin") {
     if (!auth) return <AdminLogin onLogin={() => setAuth(true)} />;
     return <AdminDash onBack={() => setPage("employee")} onGoShip={() => setPage("ship")} onLogout={logout} />;
   }
-  return <EmployeePage notice={notice} onAdmin={() => setPage("admin")} />;
+  if(!empAuth) return <EmployeeLogin onLogin={setEmpAuth} />;
+  return <EmployeePage notice={notice} onAdmin={() => setPage("admin")} empAuth={empAuth} onEmpLogout={empLogout} />;
 }
 
 
