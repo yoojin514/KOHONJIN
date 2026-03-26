@@ -1582,23 +1582,32 @@ function ShipPage({ onBack }) {
                           </div>
                           <div style={{ padding:"10px 16px" }}><ShipProdTable prods={prods} allDone={allDone} /></div>
                           <div style={{ padding:"6px 16px 12px",borderTop:"1px dashed #E5E7EB" }}>
-                            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,marginTop:6 }}>
-                              <div style={{ fontSize:11,color:"#9CA3AF" }}>신청자별 출고 상태</div>
-                              <label style={{ display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#6B7280",cursor:"pointer" }}>
-                                <input type="checkbox" style={{ accentColor:"#1A56DB" }} checked={list.length>0&&list.every(a=>checkedShipIds.has(a.id))} onChange={e=>{const n=new Set(checkedShipIds);list.forEach(a=>e.target.checked?n.add(a.id):n.delete(a.id));setCheckedShipIds(n);}} />
-                                전체선택
-                              </label>
-                            </div>
-                            <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
-                              {list.map(a=>(
-                                <div key={a.id} style={{ display:"flex",alignItems:"center",gap:6,background:checkedShipIds.has(a.id)?"#EEF3FF":a.shipStatus==="출고완료"?"#F0FDF4":"#F9FAFB",border:`1px solid ${checkedShipIds.has(a.id)?"#1A56DB":a.shipStatus==="출고완료"?"#BBF7D0":"#E5E7EB"}`,borderRadius:6,padding:"4px 10px" }}>
-                                  <input type="checkbox" style={{ accentColor:"#1A56DB" }} checked={checkedShipIds.has(a.id)} onChange={e=>{const n=new Set(checkedShipIds);e.target.checked?n.add(a.id):n.delete(a.id);setCheckedShipIds(n);}} />
-                                  <span style={{ fontSize:12,fontWeight:700 }}>{a.name}</span>
-                                  <span style={{ fontSize:11,color:"#9CA3AF" }}>{a.dept}</span>
-                                  <button style={{ fontSize:11,padding:"2px 8px",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontWeight:700,background:a.shipStatus==="출고완료"?"#059669":"#1A56DB",color:"#fff" }} onClick={()=>updateShip(a.id,a.shipStatus==="출고완료"?"출고예정":"출고완료")}>{a.shipStatus==="출고완료"?"완료":"예정"}</button>
+                            <div style={{ fontSize:11,color:"#9CA3AF",marginBottom:8,marginTop:6 }}>신청자별 신청 제품 수량</div>
+                            {(()=>{
+                              const pm={};
+                              list.forEach(a=>{
+                                const k=`${a.name}__${a.dept}`;
+                                if(!pm[k])pm[k]={name:a.name,dept:a.dept,prods:{}};
+                                [...(a.mainProducts||[]).map(p=>({...p,cat:"본품"})),...(a.sampleProducts||[]).map(p=>({...p,cat:"샘플"}))].forEach(p=>{
+                                  if(!pm[k].prods[p.name])pm[k].prods[p.name]={qty:0,cat:p.cat};
+                                  pm[k].prods[p.name].qty+=Number(p.qty)||0;
+                                });
+                              });
+                              return Object.values(pm).map((person,i)=>(
+                                <div key={i} style={{ background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:7,padding:"7px 11px",marginBottom:5 }}>
+                                  <div style={{ fontWeight:700,fontSize:12,marginBottom:4 }}>
+                                    {person.name} <span style={{ color:"#9CA3AF",fontWeight:400,fontSize:11 }}>{person.dept}</span>
+                                  </div>
+                                  <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
+                                    {Object.entries(person.prods).map(([name,{qty,cat}],j)=>(
+                                      <span key={j} style={{ fontSize:11,background:cat==="본품"?"#EEF3FF":"#F0FDF4",color:cat==="본품"?"#1A56DB":"#059669",border:`1px solid ${cat==="본품"?"#C7D7FB":"#BBF7D0"}`,borderRadius:4,padding:"2px 7px" }}>
+                                        {name} {qty}개
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
+                              ));
+                            })()}
                           </div>
                         </div>
                       );
