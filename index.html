@@ -1050,12 +1050,12 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
 
   const exportCSV = () => {
     const toExport = checkedIds.size > 0 ? apps.filter(a => checkedIds.has(a.id)) : displayed;
-    const headers = ["신청번호","이름","부서","신청일자","접수시각","결제","상태","제품구분","제품명","단가","수량","소계","본품합계","샘플합계","최종합계"];
+    const headers = ["신청번호","이름","부서","신청일자","접수시각","결제","카드사","카드번호","유효기간","상태","제품구분","제품명","단가","수량","소계","본품합계","샘플합계","최종합계"];
     const rows = [];
     toExport.forEach(a => {
       const all=[...(a.mainProducts||[]).map(p=>({...p,type:"본품"})),...(a.sampleProducts||[]).map(p=>({...p,type:"샘플"}))];
-      if(!all.length){rows.push({신청번호:a.id,이름:a.name,부서:a.dept||"",신청일자:a.date,접수시각:a.submittedAt,결제:a.pay,상태:a.status,제품구분:"",제품명:"",단가:"",수량:"",소계:"",본품합계:a.totalMain||0,샘플합계:a.totalSample||0,최종합계:a.total||0});}
-      else all.forEach((p,i)=>rows.push({신청번호:i===0?a.id:"",이름:i===0?a.name:"",부서:i===0?(a.dept||""):"",신청일자:i===0?a.date:"",접수시각:i===0?a.submittedAt:"",결제:i===0?a.pay:"",상태:i===0?a.status:"",제품구분:p.type,제품명:p.name,단가:p.price,수량:p.qty,소계:p.price*p.qty,본품합계:i===0?(a.totalMain||0):"",샘플합계:i===0?(a.totalSample||0):"",최종합계:i===0?(a.total||0):""}));
+      if(!all.length){rows.push({신청번호:a.id,이름:a.name,부서:a.dept||"",신청일자:a.date,접수시각:a.submittedAt,결제:a.pay,카드사:a.cardCompany||"",카드번호:a.cardNumber||"",유효기간:a.cardExpiry||"",상태:a.status,제품구분:"",제품명:"",단가:"",수량:"",소계:"",본품합계:a.totalMain||0,샘플합계:a.totalSample||0,최종합계:a.total||0});}
+      else all.forEach((p,i)=>rows.push({신청번호:i===0?a.id:"",이름:i===0?a.name:"",부서:i===0?(a.dept||""):"",신청일자:i===0?a.date:"",접수시각:i===0?a.submittedAt:"",결제:i===0?a.pay:"",카드사:i===0?(a.cardCompany||""):"",카드번호:i===0?(a.cardNumber||""):"",유효기간:i===0?(a.cardExpiry||""):"",상태:i===0?a.status:"",제품구분:p.type,제품명:p.name,단가:p.price,수량:p.qty,소계:p.price*p.qty,본품합계:i===0?(a.totalMain||0):"",샘플합계:i===0?(a.totalSample||0):"",최종합계:i===0?(a.total||0):""}));
     });
     const csv=[headers.join(","),...rows.map(r=>headers.map(h=>{const v=r[h]??"";return String(v).includes(",") ? `"${v}"`:v;}).join(","))].join("\n");
     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
@@ -1431,7 +1431,7 @@ function ShipPage({ onBack }) {
   const buildPickup = () => {
     const mm={},sm={};
     shipApps.forEach(a=>{
-      if((a.mainProducts||[]).length){const d=getMainPickup(a.date),k=d.toISOString().split("T")[0];if(!mm[k])mm[k]={pickupDate:k,pickupLabel:fmtDate(d),apps:[]};mm[k].apps.push(a);}
+      if((a.mainProducts||[]).length){const d=getMainPickup(a.date),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(!mm[k])mm[k]={pickupDate:k,pickupLabel:fmtDate(d),apps:[]};mm[k].apps.push(a);}
       if((a.sampleProducts||[]).length){const k=getSampleDeadline(a.date);if(!sm[k])sm[k]={label:k,apps:[]};sm[k].apps.push(a);}
     });
     return {main:Object.values(mm).sort((a,b)=>a.pickupDate.localeCompare(b.pickupDate)),sample:Object.values(sm)};
@@ -1631,6 +1631,7 @@ function AccessLogViewer() {
    직원 관리 컴포넌트
 ════════════════════════════════════════════════════════ */
 function EmployeeManager({ employees, onReload }) {
+  const isMobile = useIsMobile();
   const [form, setForm] = useState({ name: "", dept: "", hire_date: "" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -1795,7 +1796,7 @@ function EmployeeManager({ employees, onReload }) {
       </div>
 
       {/* 직원 목록 */}
-      <div>
+      <div style={{ overflowX:"auto" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:8, flexWrap:"wrap" }}>
           <div style={{ fontWeight:700, fontSize:14 }}>
             직원 목록 ({empSearch ? `${employees.filter(e=>e.name.includes(empSearch)||e.dept.includes(empSearch)).length}명 검색됨 / ` : ''}{employees.length}명)
@@ -1811,7 +1812,7 @@ function EmployeeManager({ employees, onReload }) {
           const filtered = empSearch ? employees.filter(e=>e.name.includes(empSearch)||e.dept.includes(empSearch)) : employees;
           return filtered.length === 0
           ? <div style={{ textAlign:"center", padding:32, color:"#9CA3AF" }}>{empSearch ? '검색 결과가 없습니다.' : '등록된 직원이 없습니다.'}</div>
-          : <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth: isMobile ? 560 : "auto" }}>
+          : <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, minWidth:560 }}>
               <thead>
                 <tr style={{ background:"#F9FAFB" }}>
                   {["이름","부서","입사일","신청 가능일","PIN",""].map(h => <th key={h} style={TH}>{h}</th>)}
@@ -1875,7 +1876,7 @@ function EmployeeManager({ employees, onReload }) {
                   );
                 })}
               </tbody>
-            </table></div>;
+            </table>;
         })()}
       </div>
     </div>
