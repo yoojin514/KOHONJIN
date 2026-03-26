@@ -1587,23 +1587,30 @@ function ShipPage({ onBack }) {
                               const pm={};
                               list.forEach(a=>{
                                 const k=`${a.name}__${a.dept}`;
-                                if(!pm[k])pm[k]={name:a.name,dept:a.dept,prods:{}};
-                                [...(a.mainProducts||[]).map(p=>({...p,cat:"본품"})),...(a.sampleProducts||[]).map(p=>({...p,cat:"샘플"}))].forEach(p=>{
-                                  if(!pm[k].prods[p.name])pm[k].prods[p.name]={qty:0,cat:p.cat};
-                                  pm[k].prods[p.name].qty+=Number(p.qty)||0;
-                                });
+                                if(!pm[k])pm[k]={name:a.name,dept:a.dept,orders:[]};
+                                const prods=[...(a.mainProducts||[]).map(p=>({...p,cat:"본품"})),...(a.sampleProducts||[]).map(p=>({...p,cat:"샘플"}))];
+                                pm[k].orders.push({status:a.status,prods});
                               });
                               return Object.values(pm).map((person,i)=>(
-                                <div key={i} style={{ background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:7,padding:"7px 11px",marginBottom:5 }}>
-                                  <div style={{ fontWeight:700,fontSize:12,marginBottom:4 }}>
+                                <div key={i} style={{ background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:7,padding:"8px 12px",marginBottom:5 }}>
+                                  <div style={{ fontWeight:700,fontSize:12,marginBottom:6 }}>
                                     {person.name} <span style={{ color:"#9CA3AF",fontWeight:400,fontSize:11 }}>{person.dept}</span>
+                                    <span style={{ color:"#C4C9D4",fontSize:11,marginLeft:6 }}>{person.orders.length}건</span>
                                   </div>
-                                  <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
-                                    {Object.entries(person.prods).map(([name,{qty,cat}],j)=>(
-                                      <span key={j} style={{ fontSize:11,background:cat==="본품"?"#EEF3FF":"#F0FDF4",color:cat==="본품"?"#1A56DB":"#059669",border:`1px solid ${cat==="본품"?"#C7D7FB":"#BBF7D0"}`,borderRadius:4,padding:"2px 7px" }}>
-                                        {name} {qty}개
-                                      </span>
-                                    ))}
+                                  <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                                    {person.orders.map((order,j)=>{
+                                      const sc=STATUS_COLOR[order.status]||"#9CA3AF";
+                                      return(
+                                        <div key={j} style={{ display:"flex",flexWrap:"wrap",alignItems:"center",gap:4 }}>
+                                          <span style={{ fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:sc+"22",color:sc,flexShrink:0 }}>{order.status||"—"}</span>
+                                          {order.prods.map((p,pi)=>(
+                                            <span key={pi} style={{ fontSize:11,background:p.cat==="본품"?"#EEF3FF":"#F0FDF4",color:p.cat==="본품"?"#1A56DB":"#059669",border:`1px solid ${p.cat==="본품"?"#C7D7FB":"#BBF7D0"}`,borderRadius:4,padding:"2px 7px" }}>
+                                              {p.name} {Number(p.qty)||0}개
+                                            </span>
+                                          ))}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               ));
