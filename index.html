@@ -165,10 +165,7 @@ function getMainPickup(dateStr) {
   return getNthWeekday(ty, tm % 12, 5, 1);
 }
 function getSampleDeadline(dateStr) {
-  const b = new Date(dateStr), y = b.getFullYear(), m = b.getMonth();
-  if (b <= new Date(y, m, 8)) return `${y}년 ${m+1}월 10일 이후 담당자 안내`;
-  const nm = m + 1, ny = nm > 11 ? y + 1 : y;
-  return `${ny}년 ${nm % 12 + 1}월 10일 이후 담당자 안내`;
+  return fmtDate(getMainPickup(dateStr));
 }
 function getRestrictions(apps, name, dept) {
   const res = {};
@@ -645,7 +642,7 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
           <div className="rule-div" style={{ width: 1, background: "#E5E7EB", margin: "0 16px" }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>🧪 샘플 안내</div>
-            {["월 20만원 한도 / 달에 1번","무통장 입금으로만 구매","파우치는 100장 단위","주문 마감: 매달 10일 전 영업일","결제: 매달 10일 15:30"].map(t => <div key={t} style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.8 }}>• {t}</div>)}
+            {["월 20만원 한도 / 달에 1번","무통장 입금으로만 구매","파우치는 100장 단위","주문 마감: 매달 첫째주 화요일","결제: 첫째주 화요일 15:30","수령: 매달 첫째주 금요일"].map(t => <div key={t} style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.8 }}>• {t}</div>)}
           </div>
         </div>
       </div>
@@ -1050,7 +1047,7 @@ function AdminDash({ onBack, onGoShip, onLogout }) {
     try {
       const [a, n, emps] = await Promise.all([loadApplications(), loadNotice(), loadEmployees()]);
       setApps(a || []);
-      setNotice(n || { title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 10일 전 영업일 마감", deadline: "" });
+      setNotice(n || { title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 첫째주 화요일 마감", deadline: "" });
       setEmployees(emps || []);
       // DB 테이블 존재 여부 체크
       const [sr, lr] = await Promise.all([
@@ -1659,7 +1656,7 @@ function ShipPage({ onBack }) {
 
         {mainTab==="sample"&&(
           <>
-            <div style={{ fontSize:13,color:"#166534",marginBottom:14,background:"#F0FDF4",padding:"10px 14px",borderRadius:7,border:"1px solid #BBF7D0",lineHeight:1.6 }}>🧪 <b>샘플 출고 기준:</b> 신청일이 해당 달 <b>10일 전 영업일</b> 이내 → 해당 달 10일 이후 담당자 안내</div>
+            <div style={{ fontSize:13,color:"#166534",marginBottom:14,background:"#F0FDF4",padding:"10px 14px",borderRadius:7,border:"1px solid #BBF7D0",lineHeight:1.6 }}>🧪 <b>샘플 출고 기준:</b> 신청일이 해당 달 <b>첫째주 화요일</b> 이내 → 당월 첫째주 금요일 출고 / 첫째주 화요일 마감 이후 신청 → 익월 첫째주 금요일 출고</div>
             {pickup.sample.length===0?<SAEmpty>샘플 출고 예정 내역이 없습니다.</SAEmpty>
               :pickup.sample.map((g,gi)=>{const allDone=g.apps.every(a=>a.shipStatus==="출고완료"),prods=sumProds(g.apps,"샘플"),isSel=selectedKey==="sample_"+gi;return(
                 <ShipPickupCard key={gi} allDone={allDone} isSelected={isSel} accentColor="#059669"
@@ -2168,7 +2165,7 @@ function App() {
   const [auth,       setAuth]       = useState(false);
   const [empAuth,    setEmpAuth]    = useState(null);
   const [empLoading, setEmpLoading] = useState(true);
-  const [notice,     setNotice]     = useState({ title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 10일 전 영업일 마감", deadline: "" });
+  const [notice,     setNotice]     = useState({ title: "제품 신청 안내", body: "본품: 매달 첫째주 화요일 마감 / 샘플: 매달 첫째주 화요일 마감", deadline: "" });
 
   useEffect(() => {
     const el = document.createElement("style"); el.textContent = GLOBAL_CSS; document.head.appendChild(el);
