@@ -685,6 +685,8 @@ function EmployeePage({ notice, onAdmin, empAuth, onEmpLogout }) {
             <button style={BS} onClick={async () => {
               setMyAppsLoading(true);
               const all = await loadApplications();
+              setRestrictions(getRestrictions(all, form.name.trim(), form.dept));
+              setSampleUsed(getSampleUsed(all, form.name.trim(), form.dept));
               setMyApps(all.filter(a => a.name === form.name.trim() && a.dept === form.dept));
               setMyAppsLoading(false);
             }}>🔄 새로고침</button>
